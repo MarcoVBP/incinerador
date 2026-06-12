@@ -1,12 +1,20 @@
-const CACHE = 'incinerador-v1';
+const CACHE = 'incinerador-v3';
 const ASSETS = [
   './index.html',
-  './manifest.json'
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png',
+  './tesseract.min.js',
+  './worker.min.js',
+  './eng.traineddata.gz'
 ];
 
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(ASSETS))
+    caches.open(CACHE).then(c => {
+      console.log('SW: cacheando todos los archivos...');
+      return c.addAll(ASSETS);
+    })
   );
   self.skipWaiting();
 });

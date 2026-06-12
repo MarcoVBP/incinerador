@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Monitor Panel Incinerador</title>
-<script src="https://unpkg.com/tesseract.js@4.1.4/dist/tesseract.min.js"></script>
+
 <style>
 :root{
   --bg:#0d1117;--surface:#161b22;--surface2:#21262d;
@@ -157,6 +157,7 @@ tbody td{padding:8px 10px;text-align:center;border-bottom:1px solid rgba(48,54,6
       <label>Operador (opcional)</label>
       <input type="text" id="sesionOperador" placeholder="Nombre del operador...">
     </div>
+
     <button class="btn-iniciar" onclick="iniciarSesion()">
       🚀 Iniciar registro
     </button>
@@ -288,14 +289,12 @@ let records=[];
 try{records=JSON.parse(localStorage.getItem(SK)||'[]');}catch(e){}
 let currentExtracted=null, editMode=false;
 let sortCol='fecha', sortAsc=false;
-let ocrWorker=null;
 let originalImageEl=null;
 let cropFilename='panel.jpg';
 let sesionFecha='', sesionOperador='';
 
 // ── INICIO / SESIÓN ───────────────────────────────────
 window.addEventListener('load',()=>{
-  // Set today as default date
   const today = new Date().toISOString().slice(0,10);
   document.getElementById('sesionFecha').value = today;
 });
@@ -312,7 +311,6 @@ function iniciarSesion(){
   badge.style.display='flex';
   const label = op ? `📅 ${fecha} — ${op}` : `📅 ${fecha}`;
   document.getElementById('badgeTexto').textContent = label;
-  // Auto-set hora actual
   document.getElementById('metaHora').value = new Date().toTimeString().slice(0,5);
 }
 
@@ -432,28 +430,35 @@ document.getElementById('btnConfirmCrop').addEventListener('click',()=>{
   runOCR(originalImageEl,cx,cy,cw,ch);
 });
 
-// ── OCR ───────────────────────────────────────────────
+// ── OCR con Tesseract local (offline) ────────────────
+let ocrWorker = null;
+
 async function initWorker(){
   if(ocrWorker) return ocrWorker;
-  setStatus('processing','Cargando motor OCR...');
-  ocrWorker=await Tesseract.createWorker('eng',1,{
-    logger:m=>{
-      if(m.status==='recognizing text')
-        setStatus('processing',`Reconociendo: ${Math.round((m.progress||0)*100)}%`);
+  setStatus('processing','Iniciando motor OCR...');
+  ocrWorker = await Tesseract.createWorker('eng', 1, {
+    workerPath: './worker.min.js',
+    langPath: './',
+    corePath: './tesseract.min.js',
+    logger: m => {
+      if(m.status === 'recognizing text')
+        setStatus('processing', `Reconociendo: ${Math.round((m.progress||0)*100)}%`);
+      if(m.status === 'loading language traineddata')
+        setStatus('processing', 'Cargando modelo OCR...');
     }
   });
   await ocrWorker.setParameters({
-    tessedit_char_whitelist:'0123456789.',
-    tessedit_pageseg_mode:'6',
+    tessedit_char_whitelist: '0123456789.',
+    tessedit_pageseg_mode: '6',
   });
   return ocrWorker;
 }
 
-async function runOCR(imgEl,cx,cy,cw,ch){
-  setStatus('processing','Procesando imagen...');
+async function runOCR(imgEl, cx, cy, cw, ch){
+  setStatus('processing', 'Procesando imagen...');
   document.getElementById('extractedSection').style.display='none';
   try{
-    // 1. Recortar y escalar x3
+    // 1. Recortar + escalar x3
     const scale=3;
     const c=document.createElement('canvas');
     c.width=cw*scale; c.height=ch*scale;
@@ -461,29 +466,30 @@ async function runOCR(imgEl,cx,cy,cw,ch){
     ctx.imageSmoothingEnabled=false;
     ctx.drawImage(imgEl,cx,cy,cw,ch,0,0,c.width,c.height);
 
-    // 2. Invertir colores (blancos→negros, fondo oscuro→claro)
-    const id=ctx.getImageData(0,0,c.width,c.height);
-    const d=id.data;
-    for(let i=0;i<d.length;i+=4){
-      d[i]=255-d[i]; d[i+1]=255-d[i+1]; d[i+2]=255-d[i+2];
+    // 2. Invertir colores: números blancos → negros
+    let id=ctx.getImageData(0,0,c.width,c.height);
+    for(let i=0;i<id.data.length;i+=4){
+      id.data[i]=255-id.data[i];
+      id.data[i+1]=255-id.data[i+1];
+      id.data[i+2]=255-id.data[i+2];
     }
     ctx.putImageData(id,0,0);
 
-    // 3. Umbral de contraste (binarizar)
-    const id2=ctx.getImageData(0,0,c.width,c.height);
-    const d2=id2.data;
-    for(let i=0;i<d2.length;i+=4){
-      const g=0.299*d2[i]+0.587*d2[i+1]+0.114*d2[i+2];
+    // 3. Umbral de contraste
+    id=ctx.getImageData(0,0,c.width,c.height);
+    const d=id.data;
+    for(let i=0;i<d.length;i+=4){
+      const g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
       const v=g<140?0:255;
-      d2[i]=d2[i+1]=d2[i+2]=v;
+      d[i]=d[i+1]=d[i+2]=v;
     }
-    ctx.putImageData(id2,0,0);
+    ctx.putImageData(id,0,0);
 
     // 4. OCR
     const worker=await initWorker();
     setStatus('processing','Leyendo números...');
     const {data:{text}}=await worker.recognize(c);
-    console.log('OCR raw:',text);
+    console.log('OCR raw:', text);
 
     // 5. Extraer números en orden
     const nums=[];
@@ -494,9 +500,14 @@ async function runOCR(imgEl,cx,cy,cw,ch){
         if(!isNaN(n)&&t.length>=1) nums.push(n);
       }
     }
-    console.log('Números encontrados:',nums);
+    console.log('Números:', nums);
 
     // 6. Asignar por rango y orden
+    const RANGES={
+      tempPrimaria:[100,1200],tempSecundaria:[100,1200],
+      tempBagIn:[50,500],tempBagOut:[50,500],
+      aguaRociador:[0,200],aireRociador:[0,200],
+    };
     const result={};
     FIELDS.forEach(f=>result[f.key]=null);
     let ni=0;
@@ -510,12 +521,11 @@ async function runOCR(imgEl,cx,cy,cw,ch){
 
     currentExtracted=result;
     renderExtracted(result);
-
     const found=FIELDS.filter(f=>result[f.key]!==null).length;
     if(found===0)
-      setStatus('warn','⚠️ Sin valores. Use ✂️ Recortar para ajustar la zona o ✏️ Editar para ingresar.');
+      setStatus('warn','⚠️ Sin valores. Use ✂️ Recortar para ajustar zona o ✏️ Editar para ingresar.');
     else
-      setStatus('success',`✅ ${found}/${FIELDS.length} valores detectados. Verifique y corrija si es necesario.`);
+      setStatus('success',`✅ ${found}/${FIELDS.length} valores detectados. Verifique y corrija si necesario.`);
 
   }catch(err){
     console.error('OCR error:',err);
