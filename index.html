@@ -1,146 +1,259 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#e07b39">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Incinerador">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Monitor Panel Incinerador</title>
-
 <script src="https://unpkg.com/tesseract.js@4.1.4/dist/tesseract.min.js"></script>
 <style>
-  :root{
-    --bg:#0d1117;--surface:#161b22;--surface2:#21262d;
-    --border:#30363d;--accent:#e07b39;
-    --green:#22c55e;--red:#ef4444;--yellow:#eab308;
-    --text:#e6edf3;--muted:#7d8590;
-    --heat1:#ff6b35;--heat2:#ff9e00;--cool:#38bdf8;
-  }
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;}
-  header{background:linear-gradient(135deg,#1a0800,#2d1200,#1a0800);border-bottom:2px solid var(--accent);padding:14px 20px;display:flex;align-items:center;gap:12px;}
-  header .icon{font-size:26px;}
-  header h1{font-size:17px;font-weight:700;color:var(--accent);}
-  header p{font-size:11px;color:var(--muted);margin-top:2px;}
-  .tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border);}
-  .tab{padding:10px 16px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);white-space:nowrap;}
-  .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
-  .panel{display:none;padding:16px;}
-  .panel.active{display:block;}
+:root{
+  --bg:#0d1117;--surface:#161b22;--surface2:#21262d;
+  --border:#30363d;--accent:#e07b39;
+  --green:#22c55e;--red:#ef4444;--yellow:#eab308;
+  --text:#e6edf3;--muted:#7d8590;
+  --heat1:#ff6b35;--heat2:#ff9e00;--cool:#38bdf8;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;}
 
-  .capture-zone{background:var(--surface);border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;}
-  .capture-zone.dragover{border-color:var(--accent);}
-  .cz-icon{font-size:36px;margin-bottom:8px;}
-  .cz-btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px;}
-  input[type=file]{display:none;}
+/* INICIO SCREEN */
+#inicioScreen{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:100vh;padding:24px;text-align:center;
+  background:linear-gradient(180deg,#0d1117 0%,#1a0800 100%);
+}
+#inicioScreen .logo{font-size:64px;margin-bottom:16px;}
+#inicioScreen h1{font-size:22px;font-weight:700;color:var(--accent);margin-bottom:6px;}
+#inicioScreen p{font-size:13px;color:var(--muted);margin-bottom:32px;}
+.sesion-box{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;width:100%;max-width:340px;}
+.sesion-box h3{font-size:14px;color:var(--text);margin-bottom:14px;}
+.field-row{display:flex;flex-direction:column;gap:4px;margin-bottom:14px;text-align:left;}
+.field-row label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.field-row input{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:15px;width:100%;}
+.field-row input:focus{outline:none;border-color:var(--accent);}
+.btn-iniciar{width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;}
+.btn-iniciar:active{background:#c96b2a;}
 
-  .btn{padding:9px 18px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;touch-action:manipulation;}
-  .btn-primary{background:var(--accent);color:#fff;}
-  .btn-primary:active{background:#c96b2a;}
-  .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
-  .btn-green{background:var(--green);color:#fff;}
-  .btn-red{background:var(--red);color:#fff;}
-  .btn-blue{background:#3b82f6;color:#fff;}
-  .btn-sm{padding:6px 14px;font-size:12px;}
+/* SESION BADGE */
+#sesionBadge{
+  background:rgba(224,123,57,.15);border-bottom:1px solid rgba(224,123,57,.3);
+  padding:8px 16px;display:none;align-items:center;justify-content:space-between;font-size:12px;
+}
+#sesionBadge span{color:var(--accent);}
+#sesionBadge button{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;}
 
-  /* ── CROPPER ───────────────────────────────────────── */
-  #cropperOverlay{
-    display:none;position:fixed;inset:0;background:#000;z-index:1000;
-    flex-direction:column;touch-action:none;
-  }
-  #cropperOverlay.active{display:flex;}
-  #cropperToolbar{
-    background:rgba(0,0,0,.85);padding:10px 16px;
-    display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;
-  }
-  #cropperToolbar span{font-size:12px;color:#aaa;}
-  #cropperCanvasWrap{
-    flex:1;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;
-  }
-  #cropCanvas{display:block;max-width:100%;max-height:100%;touch-action:none;}
+header{background:linear-gradient(135deg,#1a0800,#2d1200,#1a0800);border-bottom:2px solid var(--accent);padding:12px 16px;display:flex;align-items:center;gap:12px;}
+header .icon{font-size:24px;}
+header h1{font-size:16px;font-weight:700;color:var(--accent);}
+header p{font-size:10px;color:var(--muted);margin-top:1px;}
+.tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border);}
+.tab{padding:10px 16px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);white-space:nowrap;}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.panel{display:none;padding:16px;}
+.panel.active{display:block;}
 
-  /* selection rectangle drawn on top */
-  #selRect{
-    position:absolute;border:2px solid var(--accent);pointer-events:none;display:none;
-    box-shadow:0 0 0 9999px rgba(0,0,0,.5);
-  }
-  #cropperHint{
-    position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
-    background:rgba(0,0,0,.7);color:#ccc;font-size:12px;padding:6px 14px;border-radius:20px;
-    pointer-events:none;white-space:nowrap;
-  }
+/* CROPPER */
+#cropperOverlay{display:none;position:fixed;inset:0;background:#000;z-index:1000;flex-direction:column;touch-action:none;}
+#cropperOverlay.active{display:flex;}
+#cropperToolbar{background:rgba(0,0,0,.9);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;}
+#cropperToolbar span{font-size:12px;color:#aaa;}
+#cropperCanvasWrap{flex:1;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;}
+#cropCanvas{display:block;max-width:100%;max-height:100%;touch-action:none;}
+#selRect{position:absolute;border:2px solid var(--accent);pointer-events:none;display:none;box-shadow:0 0 0 9999px rgba(0,0,0,.55);}
+#cropperHint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.75);color:#ddd;font-size:12px;padding:6px 14px;border-radius:20px;pointer-events:none;white-space:nowrap;}
 
-  /* ── STATUS & PREVIEW ───────────────────────────────── */
-  #imgPreview{max-width:100%;border-radius:8px;margin-top:14px;display:none;border:1px solid var(--border);}
-  .status-bar{margin-top:12px;padding:10px 14px;border-radius:8px;font-size:13px;display:none;align-items:center;gap:8px;}
-  .status-bar.processing{display:flex;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.4);color:#93c5fd;}
-  .status-bar.success{display:flex;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.4);color:#86efac;}
-  .status-bar.error{display:flex;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);color:#fca5a5;}
-  .status-bar.warn{display:flex;background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.4);color:#fde047;}
-  .spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.2);border-top-color:#93c5fd;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0;}
-  @keyframes spin{to{transform:rotate(360deg);}}
+/* BUTTONS */
+.btn{padding:9px 18px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;touch-action:manipulation;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+.btn-green{background:var(--green);color:#fff;}
+.btn-red{background:var(--red);color:#fff;}
+.btn-sm{padding:6px 14px;font-size:12px;}
+input[type=file]{display:none;}
 
-  /* ── VALUES ─────────────────────────────────────────── */
-  .values-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px;}
-  @media(min-width:480px){.values-grid{grid-template-columns:1fr 1fr 1fr;}}
-  .val-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 8px;text-align:center;}
-  .val-card .vc-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;line-height:1.3;}
-  .val-card .vc-value{font-size:24px;font-weight:700;}
-  .val-card .vc-unit{font-size:11px;color:var(--muted);margin-top:2px;}
-  .val-card input{background:var(--surface2);border:1px solid var(--accent);color:var(--text);border-radius:6px;width:90px;font-size:18px;font-weight:700;text-align:center;padding:2px 4px;}
-  .tp .vc-value{color:var(--heat1);}
-  .ts .vc-value{color:var(--heat2);}
-  .bi .vc-value{color:var(--yellow);}
-  .bo .vc-value{color:var(--cool);}
-  .pw .vc-value{color:#38bdf8;}
-  .pa .vc-value{color:#a78bfa;}
+/* CAPTURE */
+.capture-zone{background:var(--surface);border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;}
+.capture-zone.dragover{border-color:var(--accent);}
+.cz-btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px;}
+#imgPreview{max-width:100%;border-radius:8px;margin-top:14px;display:none;border:1px solid var(--border);}
 
-  .verify-row{margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;}
-  .meta-field{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;display:flex;align-items:center;gap:6px;}
-  .meta-field label{color:var(--muted);font-size:11px;}
-  .meta-field input{background:transparent;border:none;color:var(--text);font-size:13px;width:130px;}
-  .meta-field input:focus{outline:none;}
+/* STATUS */
+.status-bar{margin-top:12px;padding:10px 14px;border-radius:8px;font-size:13px;display:none;align-items:center;gap:8px;}
+.status-bar.processing{display:flex;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.4);color:#93c5fd;}
+.status-bar.success{display:flex;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.4);color:#86efac;}
+.status-bar.error{display:flex;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);color:#fca5a5;}
+.status-bar.warn{display:flex;background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.4);color:#fde047;}
+.spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.2);border-top-color:#93c5fd;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
 
-  /* ── TABLE ───────────────────────────────────────────── */
-  .table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border);}
-  table{width:100%;border-collapse:collapse;font-size:12px;}
-  thead th{background:var(--surface2);padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);cursor:pointer;white-space:nowrap;}
-  thead th.sa{color:var(--green);}thead th.sd{color:var(--accent);}
-  tbody tr:nth-child(even){background:rgba(255,255,255,.02);}
-  tbody tr:hover{background:rgba(224,123,57,.05);}
-  tbody td{padding:8px 10px;text-align:center;border-bottom:1px solid rgba(48,54,61,.5);}
-  .c-dt{color:var(--muted);font-size:11px;}
-  .c-h1{color:var(--heat1);font-weight:600;}.c-h2{color:var(--heat2);font-weight:600;}
-  .c-yw{color:var(--yellow);}.c-cl{color:var(--cool);}
-  .c-pw{color:#38bdf8;}.c-pa{color:#a78bfa;}
-  .c-nu{color:var(--border);}
-  .c-del{cursor:pointer;color:var(--muted);}
-  .c-del:hover{color:var(--red);}
-  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;}
-  .count{font-size:12px;color:var(--muted);margin-left:auto;}
-  .empty-msg{text-align:center;padding:40px 16px;color:var(--muted);}
-  .em-icon{font-size:34px;margin-bottom:8px;}
+/* VALUES */
+.values-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px;}
+@media(min-width:480px){.values-grid{grid-template-columns:1fr 1fr 1fr;}}
+.val-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 8px;text-align:center;}
+.val-card .vc-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;line-height:1.3;}
+.val-card .vc-value{font-size:24px;font-weight:700;}
+.val-card .vc-unit{font-size:11px;color:var(--muted);margin-top:2px;}
+.val-card input{background:var(--surface2);border:1px solid var(--accent);color:var(--text);border-radius:6px;width:90px;font-size:18px;font-weight:700;text-align:center;padding:2px 4px;}
+.tp .vc-value{color:var(--heat1);}
+.ts .vc-value{color:var(--heat2);}
+.bi .vc-value{color:var(--yellow);}
+.bo .vc-value{color:var(--cool);}
+.pw .vc-value{color:#38bdf8;}
+.pa .vc-value{color:#a78bfa;}
 
-  /* ── STATS ───────────────────────────────────────────── */
-  .stat-block{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;}
-  .stat-block h4{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;}
-  .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
-  .stat-cell{text-align:center;}
-  .stat-cell .sv{font-size:20px;font-weight:700;}
-  .stat-cell .sl{font-size:10px;color:var(--muted);margin-top:2px;}
+.verify-row{margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;}
+.meta-field{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;display:flex;align-items:center;gap:6px;}
+.meta-field label{color:var(--muted);font-size:11px;}
+.meta-field input{background:transparent;border:none;color:var(--text);font-size:13px;width:130px;}
+.meta-field input:focus{outline:none;}
+
+/* TABLE */
+.table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border);}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead th{background:var(--surface2);padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);cursor:pointer;white-space:nowrap;}
+thead th.sa{color:var(--green);}thead th.sd{color:var(--accent);}
+tbody tr:nth-child(even){background:rgba(255,255,255,.02);}
+tbody tr:hover{background:rgba(224,123,57,.05);}
+tbody td{padding:8px 10px;text-align:center;border-bottom:1px solid rgba(48,54,61,.5);}
+.c-dt{color:var(--muted);font-size:11px;}
+.c-h1{color:var(--heat1);font-weight:600;}.c-h2{color:var(--heat2);font-weight:600;}
+.c-yw{color:var(--yellow);}.c-cl{color:var(--cool);}
+.c-pw{color:#38bdf8;}.c-pa{color:#a78bfa;}
+.c-nu{color:var(--border);}
+.c-del{cursor:pointer;color:var(--muted);}
+.c-del:hover{color:var(--red);}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;}
+.count{font-size:12px;color:var(--muted);margin-left:auto;}
+.empty-msg{text-align:center;padding:40px 16px;color:var(--muted);}
+.em-icon{font-size:34px;margin-bottom:8px;}
+.stat-block{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;}
+.stat-block h4{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;}
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+.stat-cell{text-align:center;}
+.stat-cell .sv{font-size:20px;font-weight:700;}
+.stat-cell .sl{font-size:10px;color:var(--muted);margin-top:2px;}
 </style>
 </head>
 <body>
 
-<!-- ═══ CROPPER OVERLAY ══════════════════════════════════ -->
+<!-- ═══ PANTALLA DE INICIO ═══════════════════════════ -->
+<div id="inicioScreen">
+  <div class="logo">🔥</div>
+  <h1>Monitor Panel Incinerador</h1>
+  <p>Registro de temperaturas y presiones</p>
+  <div class="sesion-box">
+    <h3>Iniciar sesión de registro</h3>
+    <div class="field-row">
+      <label>Fecha del registro</label>
+      <input type="date" id="sesionFecha">
+    </div>
+    <div class="field-row">
+      <label>Operador (opcional)</label>
+      <input type="text" id="sesionOperador" placeholder="Nombre del operador...">
+    </div>
+    <button class="btn-iniciar" onclick="iniciarSesion()">
+      🚀 Iniciar registro
+    </button>
+  </div>
+</div>
+
+<!-- ═══ APP PRINCIPAL ════════════════════════════════ -->
+<div id="appMain" style="display:none">
+
+  <!-- Sesión badge -->
+  <div id="sesionBadge">
+    <span id="badgeTexto">📅 —</span>
+    <button onclick="cerrarSesion()">✖ Cerrar sesión</button>
+  </div>
+
+  <header>
+    <div class="icon">🔥</div>
+    <div>
+      <h1>MONITOR PANEL INCINERADOR</h1>
+      <p>Temperaturas y presiones — OCR local</p>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('capture')">📷 Captura</div>
+    <div class="tab" onclick="switchTab('records')">📋 Registros</div>
+    <div class="tab" onclick="switchTab('stats')">📊 Estadísticas</div>
+  </div>
+
+  <!-- CAPTURE -->
+  <div class="panel active" id="tab-capture">
+    <div class="capture-zone" id="dropZone">
+      <div style="font-size:34px;margin-bottom:8px;">📷</div>
+      <h3 style="font-size:15px;margin-bottom:4px;">Cargar foto del panel</h3>
+      <p style="font-size:12px;color:var(--muted);">Recorte la zona con los números antes del OCR</p>
+      <div class="cz-btns">
+        <button class="btn btn-primary" onclick="document.getElementById('camInput').click()">📸 Cámara</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">🖼️ Archivo</button>
+      </div>
+      <input type="file" id="camInput" accept="image/*" capture="environment" onchange="handleImage(this)">
+      <input type="file" id="fileInput" accept="image/*" onchange="handleImage(this)">
+    </div>
+
+    <img id="imgPreview" alt="Vista previa">
+
+    <div class="status-bar" id="statusBar">
+      <div class="spinner" id="spinner" style="display:none"></div>
+      <span id="statusMsg"></span>
+    </div>
+
+    <div id="extractedSection" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;margin-bottom:10px;">
+        <h3 style="font-size:14px;color:var(--accent)">⚡ Valores extraídos</h3>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-sm btn-secondary" onclick="openCropperForRetry()">✂️ Recortar</button>
+          <button class="btn btn-sm btn-secondary" onclick="toggleEdit()" id="btnEditar">✏️ Editar</button>
+        </div>
+      </div>
+      <div class="values-grid" id="valuesGrid"></div>
+      <div class="verify-row">
+        <div class="meta-field"><label>Hora</label><input type="time" id="metaHora"></div>
+        <div class="meta-field"><label>Obs.</label><input type="text" id="metaNotes" placeholder="Opcional..." style="width:140px"></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
+        <button class="btn btn-green" onclick="saveRecord()">💾 Guardar</button>
+        <button class="btn btn-secondary" onclick="resetCapture()">🔄 Nueva foto</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECORDS -->
+  <div class="panel" id="tab-records">
+    <div class="toolbar">
+      <button class="btn btn-secondary btn-sm" onclick="exportCSV()">⬇️ CSV</button>
+      <button class="btn btn-secondary btn-sm" onclick="exportJSON()">💾 JSON</button>
+      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('importJSON').click()">📂 Importar</button>
+      <input type="file" id="importJSON" accept=".json" onchange="importJSONFile(this)">
+      <span class="count" id="recCount">0 registros</span>
+    </div>
+    <div id="recordsTableWrap">
+      <div class="empty-msg"><div class="em-icon">📋</div><p>Sin registros aún.</p></div>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="panel" id="tab-stats">
+    <div id="statsContent">
+      <div class="empty-msg"><div class="em-icon">📊</div><p>Guarda al menos un registro.</p></div>
+    </div>
+  </div>
+
+</div><!-- /appMain -->
+
+<!-- ═══ CROPPER OVERLAY ══════════════════════════════ -->
 <div id="cropperOverlay">
   <div id="cropperToolbar">
-    <span>✂️ Arrastre para seleccionar la zona con números</span>
+    <span>✂️ Arrastre para seleccionar zona con números</span>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-green btn-sm" id="btnConfirmCrop">✅ Recortar</button>
       <button class="btn btn-red btn-sm" onclick="cancelCrop()">✖ Cancelar</button>
@@ -153,100 +266,62 @@
   </div>
 </div>
 
-<header>
-  <div class="icon">🔥</div>
-  <div>
-    <h1>MONITOR PANEL INCINERADOR</h1>
-    <p>Temperaturas y presiones — OCR local sin API key</p>
-  </div>
-</header>
-
-<div class="tabs">
-  <div class="tab active" onclick="switchTab('capture')">📷 Captura</div>
-  <div class="tab" onclick="switchTab('records')">📋 Registros</div>
-  <div class="tab" onclick="switchTab('stats')">📊 Estadísticas</div>
-</div>
-
-<!-- CAPTURE -->
-<div class="panel active" id="tab-capture">
-  <div class="capture-zone" id="dropZone">
-    <div class="cz-icon">📷</div>
-    <h3 style="font-size:15px;margin-bottom:4px;">Cargar foto del panel</h3>
-    <p style="font-size:12px;color:var(--muted);">Podrá recortar la zona con los números antes del OCR</p>
-    <div class="cz-btns">
-      <button class="btn btn-primary" onclick="document.getElementById('camInput').click()">📸 Cámara</button>
-      <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">🖼️ Archivo</button>
-    </div>
-    <input type="file" id="camInput" accept="image/*" capture="environment" onchange="handleImage(this)">
-    <input type="file" id="fileInput" accept="image/*" onchange="handleImage(this)">
-  </div>
-
-  <img id="imgPreview" alt="Vista previa">
-
-  <div class="status-bar" id="statusBar">
-    <div class="spinner" id="spinner" style="display:none"></div>
-    <span id="statusMsg"></span>
-  </div>
-
-  <div id="extractedSection" style="display:none">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;margin-bottom:10px;">
-      <h3 style="font-size:14px;color:var(--accent)">⚡ Valores extraídos</h3>
-      <div style="display:flex;gap:8px;">
-        <button class="btn btn-sm btn-secondary" onclick="openCropperForRetry()">✂️ Recortar</button>
-        <button class="btn btn-sm btn-secondary" onclick="toggleEdit()">✏️ Editar</button>
-      </div>
-    </div>
-    <div class="values-grid" id="valuesGrid"></div>
-    <div class="verify-row">
-      <div class="meta-field"><label>Fecha</label><input type="date" id="metaFecha"></div>
-      <div class="meta-field"><label>Hora</label><input type="time" id="metaHora"></div>
-      <div class="meta-field"><label>Obs.</label><input type="text" id="metaNotes" placeholder="Opcional..." style="width:140px"></div>
-    </div>
-    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
-      <button class="btn btn-green" onclick="saveRecord()">💾 Guardar</button>
-      <button class="btn btn-secondary" onclick="resetCapture()">🔄 Nueva foto</button>
-    </div>
-  </div>
-</div>
-
-<!-- RECORDS -->
-<div class="panel" id="tab-records">
-  <div class="toolbar">
-    <button class="btn btn-secondary btn-sm" onclick="exportCSV()">⬇️ CSV</button>
-    <button class="btn btn-secondary btn-sm" onclick="exportJSON()">💾 JSON</button>
-    <button class="btn btn-secondary btn-sm" onclick="document.getElementById('importJSON').click()">📂 Importar</button>
-    <input type="file" id="importJSON" accept=".json" onchange="importJSONFile(this)">
-    <span class="count" id="recCount">0 registros</span>
-  </div>
-  <div id="recordsTableWrap">
-    <div class="empty-msg"><div class="em-icon">📋</div><p>Sin registros aún.</p></div>
-  </div>
-</div>
-
-<!-- STATS -->
-<div class="panel" id="tab-stats">
-  <div id="statsContent">
-    <div class="empty-msg"><div class="em-icon">📊</div><p>Guarda al menos un registro.</p></div>
-  </div>
-</div>
-
 <script>
 // ── FIELDS ───────────────────────────────────────────
 const FIELDS = [
-  {key:'tempPrimaria',   label:'T. Cámara Primaria',  unit:'°C',  cls:'tp'},
-  {key:'tempSecundaria', label:'T. Cámara Secundaria', unit:'°C',  cls:'ts'},
-  {key:'tempBagIn',      label:'Temp IN Bag House',    unit:'°C',  cls:'bi'},
-  {key:'tempBagOut',     label:'Temp OUT Bag House',   unit:'°C',  cls:'bo'},
-  {key:'aguaRociador',   label:'Agua Rociador',        unit:'PSI', cls:'pw'},
-  {key:'aireRociador',   label:'Aire Rociador',        unit:'PSI', cls:'pa'},
+  {key:'tempPrimaria',   label:'T. Cámara Primaria',  unit:'°C', cls:'tp'},
+  {key:'tempSecundaria', label:'T. Cámara Secundaria', unit:'°C', cls:'ts'},
+  {key:'tempBagIn',      label:'Temp IN Bag House',    unit:'°C', cls:'bi'},
+  {key:'tempBagOut',     label:'Temp OUT Bag House',   unit:'°C', cls:'bo'},
+  {key:'aguaRociador',   label:'Agua Rociador',        unit:'PSI',cls:'pw'},
+  {key:'aireRociador',   label:'Aire Rociador',        unit:'PSI',cls:'pa'},
 ];
+const RANGES = {
+  tempPrimaria:[100,1200], tempSecundaria:[100,1200],
+  tempBagIn:[50,500],      tempBagOut:[50,500],
+  aguaRociador:[0,200],    aireRociador:[0,200],
+};
+
 // ── STATE ─────────────────────────────────────────────
 const SK='incinerador_v3';
 let records=[];
 try{records=JSON.parse(localStorage.getItem(SK)||'[]');}catch(e){}
 let currentExtracted=null, editMode=false;
 let sortCol='fecha', sortAsc=false;
+let ocrWorker=null;
 let originalImageEl=null;
+let cropFilename='panel.jpg';
+let sesionFecha='', sesionOperador='';
+
+// ── INICIO / SESIÓN ───────────────────────────────────
+window.addEventListener('load',()=>{
+  // Set today as default date
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('sesionFecha').value = today;
+});
+
+function iniciarSesion(){
+  const fecha = document.getElementById('sesionFecha').value;
+  const op    = document.getElementById('sesionOperador').value.trim();
+  if(!fecha){ alert('Seleccione una fecha para el registro.'); return; }
+  sesionFecha    = fecha;
+  sesionOperador = op;
+  document.getElementById('inicioScreen').style.display='none';
+  document.getElementById('appMain').style.display='block';
+  const badge = document.getElementById('sesionBadge');
+  badge.style.display='flex';
+  const label = op ? `📅 ${fecha} — ${op}` : `📅 ${fecha}`;
+  document.getElementById('badgeTexto').textContent = label;
+  // Auto-set hora actual
+  document.getElementById('metaHora').value = new Date().toTimeString().slice(0,5);
+}
+
+function cerrarSesion(){
+  if(!confirm('¿Cerrar sesión de registro?')) return;
+  document.getElementById('appMain').style.display='none';
+  document.getElementById('inicioScreen').style.display='flex';
+  resetCapture();
+}
 
 // ── TABS ──────────────────────────────────────────────
 function switchTab(tab){
@@ -258,234 +333,170 @@ function switchTab(tab){
   if(tab==='stats') renderStats();
 }
 
-// ── DRAG & DROP ───────────────────────────────────────
-const dz=document.getElementById('dropZone');
-dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dragover');});
-dz.addEventListener('dragleave',()=>dz.classList.remove('dragover'));
-dz.addEventListener('drop',e=>{
-  e.preventDefault();dz.classList.remove('dragover');
-  const f=e.dataTransfer.files[0];
-  if(f&&f.type.startsWith('image/')) processFile(f);
-});
-function handleImage(inp){if(!inp.files[0])return;processFile(inp.files[0]);inp.value='';}
-
-function processFile(file){
+// ── IMAGE LOAD ────────────────────────────────────────
+function handleImage(inp){
+  if(!inp.files[0]) return;
+  const file=inp.files[0];
+  cropFilename=file.name;
   const reader=new FileReader();
   reader.onload=e=>{
     const img=new Image();
-    img.onload=()=>{
-      originalImageEl=img;
-      openCropper(img, file.name);
-    };
+    img.onload=()=>{ originalImageEl=img; openCropper(img); };
     img.src=e.target.result;
   };
   reader.readAsDataURL(file);
+  inp.value='';
 }
 
-// ══════════════════════════════════════════════════════
-// CROPPER
-// ══════════════════════════════════════════════════════
-let cropFilename='';
-let cropScale=1; // canvas display scale vs natural image
-let sel={x:0,y:0,w:0,h:0,active:false,dragging:false,startX:0,startY:0};
+// ── CROPPER ───────────────────────────────────────────
+let cropScale=1;
+let sel={active:false,dragging:false,startX:0,startY:0,w:0,h:0};
 
-function openCropper(imgEl, filename){
-  cropFilename = filename||'panel.jpg';
-  const overlay = document.getElementById('cropperOverlay');
-  const canvas  = document.getElementById('cropCanvas');
-  const wrap    = document.getElementById('cropperCanvasWrap');
-  overlay.classList.add('active');
+function openCropper(imgEl){
+  const overlay=document.getElementById('cropperOverlay');
+  const canvas=document.getElementById('cropCanvas');
+  overlay.style.display='flex';
 
-  // Fit image into screen
-  const maxW = window.innerWidth;
-  const maxH = window.innerHeight - 60; // minus toolbar
-  const scale = Math.min(maxW/imgEl.naturalWidth, maxH/imgEl.naturalHeight, 1);
-  cropScale = scale;
+  const maxW=window.innerWidth;
+  const maxH=window.innerHeight-58;
+  cropScale=Math.min(maxW/imgEl.naturalWidth, maxH/imgEl.naturalHeight, 1);
 
-  canvas.width  = Math.floor(imgEl.naturalWidth  * scale);
-  canvas.height = Math.floor(imgEl.naturalHeight * scale);
+  canvas.width =Math.floor(imgEl.naturalWidth *cropScale);
+  canvas.height=Math.floor(imgEl.naturalHeight*cropScale);
+  canvas.getContext('2d').drawImage(imgEl,0,0,canvas.width,canvas.height);
 
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(imgEl, 0, 0, canvas.width, canvas.height);
-
-  sel = {x:0,y:0,w:0,h:0,active:false,dragging:false,startX:0,startY:0};
+  sel={active:false,dragging:false,startX:0,startY:0,w:0,h:0};
   document.getElementById('selRect').style.display='none';
   document.getElementById('cropperHint').style.display='block';
 }
 
 function openCropperForRetry(){
-  if(originalImageEl) openCropper(originalImageEl, cropFilename);
+  if(originalImageEl) openCropper(originalImageEl);
 }
-
 function cancelCrop(){
-  document.getElementById('cropperOverlay').classList.remove('active');
+  document.getElementById('cropperOverlay').style.display='none';
 }
 
-// Get position relative to canvas
-function getPos(e, canvas){
-  const rect = canvas.getBoundingClientRect();
-  const src  = e.touches ? e.touches[0] : e;
-  return {
-    x: src.clientX - rect.left,
-    y: src.clientY - rect.top
-  };
+function getPos(e,canvas){
+  const r=canvas.getBoundingClientRect();
+  const s=e.touches?e.touches[0]:e;
+  return{x:Math.max(0,Math.min(s.clientX-r.left,canvas.width)),
+         y:Math.max(0,Math.min(s.clientY-r.top, canvas.height))};
 }
-
-// Draw selection rectangle overlay
 function updateSelRect(canvas){
-  const rect = document.getElementById('selRect');
-  const canvasRect = canvas.getBoundingClientRect();
-  if(!sel.active || sel.w===0 || sel.h===0){rect.style.display='none';return;}
-  const x = Math.min(sel.startX, sel.startX+sel.w);
-  const y = Math.min(sel.startY, sel.startY+sel.h);
-  const w = Math.abs(sel.w);
-  const h = Math.abs(sel.h);
+  const rect=document.getElementById('selRect');
+  const cr=canvas.getBoundingClientRect();
+  if(!sel.active||Math.abs(sel.w)<5||Math.abs(sel.h)<5){rect.style.display='none';return;}
+  const x=Math.min(sel.startX,sel.startX+sel.w);
+  const y=Math.min(sel.startY,sel.startY+sel.h);
   rect.style.display='block';
-  rect.style.left   = (canvasRect.left + x)+'px';
-  rect.style.top    = (canvasRect.top  + y)+'px';
-  rect.style.width  = w+'px';
-  rect.style.height = h+'px';
+  rect.style.left=(cr.left+x)+'px'; rect.style.top=(cr.top+y)+'px';
+  rect.style.width=Math.abs(sel.w)+'px'; rect.style.height=Math.abs(sel.h)+'px';
 }
 
-const cropCanvas = document.getElementById('cropCanvas');
-
-function onCropStart(e){
-  e.preventDefault();
-  const p=getPos(e,cropCanvas);
-  sel={x:p.x,y:p.y,w:0,h:0,active:true,dragging:true,startX:p.x,startY:p.y};
-  document.getElementById('cropperHint').style.display='none';
-  updateSelRect(cropCanvas);
-}
-function onCropMove(e){
-  e.preventDefault();
-  if(!sel.dragging) return;
-  const p=getPos(e,cropCanvas);
-  sel.w=p.x-sel.startX;
-  sel.h=p.y-sel.startY;
-  updateSelRect(cropCanvas);
-}
-function onCropEnd(e){
-  e.preventDefault();
-  sel.dragging=false;
-}
-
-cropCanvas.addEventListener('mousedown', onCropStart);
-cropCanvas.addEventListener('mousemove', onCropMove);
-cropCanvas.addEventListener('mouseup',   onCropEnd);
-cropCanvas.addEventListener('touchstart',onCropStart,{passive:false});
-cropCanvas.addEventListener('touchmove', onCropMove, {passive:false});
-cropCanvas.addEventListener('touchend',  onCropEnd,  {passive:false});
+const cc=document.getElementById('cropCanvas');
+function onStart(e){e.preventDefault();const p=getPos(e,cc);sel={active:true,dragging:true,startX:p.x,startY:p.y,w:0,h:0};document.getElementById('cropperHint').style.display='none';}
+function onMove(e){e.preventDefault();if(!sel.dragging)return;const p=getPos(e,cc);sel.w=p.x-sel.startX;sel.h=p.y-sel.startY;updateSelRect(cc);}
+function onEnd(e){e.preventDefault();sel.dragging=false;}
+cc.addEventListener('mousedown',onStart);cc.addEventListener('mousemove',onMove);cc.addEventListener('mouseup',onEnd);
+cc.addEventListener('touchstart',onStart,{passive:false});cc.addEventListener('touchmove',onMove,{passive:false});cc.addEventListener('touchend',onEnd,{passive:false});
 
 document.getElementById('btnConfirmCrop').addEventListener('click',()=>{
-  const w=Math.abs(sel.w), h=Math.abs(sel.h);
+  document.getElementById('cropperOverlay').style.display='none';
 
-  // If no selection or too small, use full image
-  let cropX, cropY, cropW, cropH;
-  if(!sel.active || w<20 || h<20){
-    cropX=0; cropY=0;
-    cropW=originalImageEl.naturalWidth;
-    cropH=originalImageEl.naturalHeight;
+  let cx,cy,cw,ch;
+  const W=originalImageEl.naturalWidth, H=originalImageEl.naturalHeight;
+
+  if(!sel.active||Math.abs(sel.w)<20||Math.abs(sel.h)<20){
+    cx=0;cy=0;cw=W;ch=H;
   } else {
-    // Convert display coords → original image coords
-    const sx = Math.min(sel.startX, sel.startX+sel.w);
-    const sy = Math.min(sel.startY, sel.startY+sel.h);
-    cropX = Math.round(sx / cropScale);
-    cropY = Math.round(sy / cropScale);
-    cropW = Math.round(w  / cropScale);
-    cropH = Math.round(h  / cropScale);
-    // Clamp
-    cropX = Math.max(0, Math.min(cropX, originalImageEl.naturalWidth));
-    cropY = Math.max(0, Math.min(cropY, originalImageEl.naturalHeight));
-    cropW = Math.min(cropW, originalImageEl.naturalWidth  - cropX);
-    cropH = Math.min(cropH, originalImageEl.naturalHeight - cropY);
+    const sx=Math.min(sel.startX,sel.startX+sel.w);
+    const sy=Math.min(sel.startY,sel.startY+sel.h);
+    cx=Math.max(0,Math.round(sx/cropScale));
+    cy=Math.max(0,Math.round(sy/cropScale));
+    cw=Math.min(Math.round(Math.abs(sel.w)/cropScale), W-cx);
+    ch=Math.min(Math.round(Math.abs(sel.h)/cropScale), H-cy);
   }
 
-  document.getElementById('cropperOverlay').classList.remove('active');
-
   // Show cropped preview
-  const preview = document.getElementById('imgPreview');
-  const pc = document.createElement('canvas');
-  pc.width=cropW; pc.height=cropH;
-  pc.getContext('2d').drawImage(originalImageEl, cropX,cropY,cropW,cropH, 0,0,cropW,cropH);
-  preview.src = pc.toDataURL('image/jpeg',0.95);
-  preview.style.display='block';
+  const prev=document.getElementById('imgPreview');
+  const pc=document.createElement('canvas');
+  pc.width=cw;pc.height=ch;
+  pc.getContext('2d').drawImage(originalImageEl,cx,cy,cw,ch,0,0,cw,ch);
+  prev.src=pc.toDataURL('image/jpeg',0.95);
+  prev.style.display='block';
 
-  runOCR(originalImageEl, cropX, cropY, cropW, cropH, cropFilename);
+  // Update hora
+  document.getElementById('metaHora').value=new Date().toTimeString().slice(0,5);
+
+  runOCR(originalImageEl,cx,cy,cw,ch);
 });
 
-// ── OCR con Tesseract (igual que ENVEA) ───────────────
-let ocrWorker = null;
-
+// ── OCR ───────────────────────────────────────────────
 async function initWorker(){
   if(ocrWorker) return ocrWorker;
   setStatus('processing','Cargando motor OCR...');
-  ocrWorker = await Tesseract.createWorker('eng', 1, {
-    logger: m => {
+  ocrWorker=await Tesseract.createWorker('eng',1,{
+    logger:m=>{
       if(m.status==='recognizing text')
         setStatus('processing',`Reconociendo: ${Math.round((m.progress||0)*100)}%`);
     }
   });
   await ocrWorker.setParameters({
-    tessedit_char_whitelist: '0123456789.',
-    tessedit_pageseg_mode: '6',
+    tessedit_char_whitelist:'0123456789.',
+    tessedit_pageseg_mode:'6',
   });
   return ocrWorker;
 }
 
-async function runOCR(imgEl, cx, cy, cw, ch, filename){
-  setStatus('processing','Preparando imagen...');
+async function runOCR(imgEl,cx,cy,cw,ch){
+  setStatus('processing','Procesando imagen...');
   document.getElementById('extractedSection').style.display='none';
-
   try{
-    // Crop + escalar x3 + invertir + umbral (mismo método que ENVEA)
+    // 1. Recortar y escalar x3
     const scale=3;
     const c=document.createElement('canvas');
     c.width=cw*scale; c.height=ch*scale;
     const ctx=c.getContext('2d');
     ctx.imageSmoothingEnabled=false;
-    ctx.drawImage(imgEl, cx,cy,cw,ch, 0,0,c.width,c.height);
+    ctx.drawImage(imgEl,cx,cy,cw,ch,0,0,c.width,c.height);
 
-    // Invertir colores: fondo oscuro→claro, números blancos→negros
-    let id=ctx.getImageData(0,0,c.width,c.height);
-    for(let i=0;i<id.data.length;i+=4){
-      id.data[i]=255-id.data[i];
-      id.data[i+1]=255-id.data[i+1];
-      id.data[i+2]=255-id.data[i+2];
-    }
-    ctx.putImageData(id,0,0);
-
-    // Umbral de contraste
-    id=ctx.getImageData(0,0,c.width,c.height);
+    // 2. Invertir colores (blancos→negros, fondo oscuro→claro)
+    const id=ctx.getImageData(0,0,c.width,c.height);
     const d=id.data;
     for(let i=0;i<d.length;i+=4){
-      const g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
-      const v=g<160?0:255;
-      d[i]=d[i+1]=d[i+2]=v;
+      d[i]=255-d[i]; d[i+1]=255-d[i+1]; d[i+2]=255-d[i+2];
     }
     ctx.putImageData(id,0,0);
 
+    // 3. Umbral de contraste (binarizar)
+    const id2=ctx.getImageData(0,0,c.width,c.height);
+    const d2=id2.data;
+    for(let i=0;i<d2.length;i+=4){
+      const g=0.299*d2[i]+0.587*d2[i+1]+0.114*d2[i+2];
+      const v=g<140?0:255;
+      d2[i]=d2[i+1]=d2[i+2]=v;
+    }
+    ctx.putImageData(id2,0,0);
+
+    // 4. OCR
     const worker=await initWorker();
     setStatus('processing','Leyendo números...');
     const {data:{text}}=await worker.recognize(c);
-    console.log('OCR raw:', text);
+    console.log('OCR raw:',text);
 
-    // Extraer números en orden de aparición
+    // 5. Extraer números en orden
     const nums=[];
     for(const line of text.split('\n')){
-      const tokens=line.match(/\d+\.?\d*/g);
-      if(tokens) tokens.forEach(t=>{
+      const tokens=line.match(/\d+\.?\d*/g)||[];
+      for(const t of tokens){
         const n=parseFloat(t);
         if(!isNaN(n)&&t.length>=1) nums.push(n);
-      });
+      }
     }
-    console.log('Números:', nums);
+    console.log('Números encontrados:',nums);
 
-    // Asignar por rango y orden
-    const RANGES={
-      tempPrimaria:[100,1200],tempSecundaria:[100,1200],
-      tempBagIn:[50,500],tempBagOut:[50,500],
-      aguaRociador:[0,200],aireRociador:[0,200],
-    };
+    // 6. Asignar por rango y orden
     const result={};
     FIELDS.forEach(f=>result[f.key]=null);
     let ni=0;
@@ -497,31 +508,21 @@ async function runOCR(imgEl, cx, cy, cw, ch, filename){
       }
     }
 
-    const ts=parseTsFromName(filename)||new Date();
-    document.getElementById('metaFecha').value=ts.toISOString().slice(0,10);
-    document.getElementById('metaHora').value=ts.toTimeString().slice(0,5);
-
     currentExtracted=result;
     renderExtracted(result);
 
     const found=FIELDS.filter(f=>result[f.key]!==null).length;
     if(found===0)
-      setStatus('warn','⚠️ Sin valores detectados. Use ✂️ Recortar para ajustar zona o ✏️ Editar para ingresar.');
+      setStatus('warn','⚠️ Sin valores. Use ✂️ Recortar para ajustar la zona o ✏️ Editar para ingresar.');
     else
       setStatus('success',`✅ ${found}/${FIELDS.length} valores detectados. Verifique y corrija si es necesario.`);
 
   }catch(err){
-    console.error(err);
-    setStatus('error',`❌ ${err.message} — Use ✏️ Editar para ingresar manualmente.`);
+    console.error('OCR error:',err);
+    setStatus('error','❌ Error OCR. Use ✏️ Editar para ingresar manualmente.');
     const empty={};FIELDS.forEach(f=>empty[f.key]=null);
     currentExtracted=empty;renderExtracted(empty);
   }
-}
-
-function parseTsFromName(name){
-  const m=name.match(/(\d{2})-(\d{2})-(\d{4})\s*(\d{2})(\d{2})/);
-  if(m) return new Date(`${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:00`);
-  return null;
 }
 
 // ── RENDER ────────────────────────────────────────────
@@ -541,6 +542,7 @@ function renderExtracted(data){
   });
   document.getElementById('extractedSection').style.display='block';
   editMode=false;
+  document.getElementById('btnEditar').textContent='✏️ Editar';
 }
 
 function toggleEdit(){
@@ -551,13 +553,13 @@ function toggleEdit(){
     if(editMode){
       vv.innerHTML=`<input type="number" step="any" value="${val!=null?val:''}"
         onchange="currentExtracted['${f.key}']=this.value===''?null:parseFloat(this.value)">`;
-    } else {
+    }else{
       const inp=vv.querySelector('input');
       if(inp&&currentExtracted) currentExtracted[f.key]=inp.value===''?null:parseFloat(inp.value);
       vv.textContent=currentExtracted&&currentExtracted[f.key]!=null?currentExtracted[f.key]:'—';
     }
   });
-  document.querySelector('[onclick="toggleEdit()"]').textContent=editMode?'✅ Listo':'✏️ Editar';
+  document.getElementById('btnEditar').textContent=editMode?'✅ Listo':'✏️ Editar';
 }
 
 // ── SAVE ──────────────────────────────────────────────
@@ -566,15 +568,18 @@ function saveRecord(){
   if(editMode) toggleEdit();
   const rec={
     id:Date.now(),
-    fecha:document.getElementById('metaFecha').value,
+    fecha:sesionFecha,
     hora:document.getElementById('metaHora').value,
+    operador:sesionOperador,
     notes:document.getElementById('metaNotes').value,
     ...Object.fromEntries(FIELDS.map(f=>[f.key,currentExtracted[f.key]]))
   };
   records.unshift(rec);
   try{localStorage.setItem(SK,JSON.stringify(records));}catch(e){}
   setStatus('success',`✅ Guardado — ${rec.fecha} ${rec.hora}`);
-  resetCapture();switchTab('records');
+  resetCapture();
+  // Update hora for next capture
+  document.getElementById('metaHora').value=new Date().toTimeString().slice(0,5);
 }
 
 function resetCapture(){
@@ -601,19 +606,15 @@ function renderTable(){
   const sorted=[...records].sort((a,b)=>{
     let va=sortCol==='fecha'?`${a.fecha} ${a.hora}`:a[sortCol];
     let vb=sortCol==='fecha'?`${b.fecha} ${b.hora}`:b[sortCol];
-    if(va==null) return 1;if(vb==null) return -1;
+    if(va==null)return 1;if(vb==null)return -1;
     return sortAsc?(va>vb?1:-1):(va<vb?1:-1);
   });
   const cols=[
-    {k:'fecha',l:'Fecha/Hora',c:'c-dt'},
-    {k:'tempPrimaria',l:'T.Prim °C',c:'c-h1'},
-    {k:'tempSecundaria',l:'T.Sec °C',c:'c-h2'},
-    {k:'tempBagIn',l:'Bag IN °C',c:'c-yw'},
-    {k:'tempBagOut',l:'Bag OUT °C',c:'c-cl'},
-    {k:'aguaRociador',l:'Agua PSI',c:'c-pw'},
-    {k:'aireRociador',l:'Aire PSI',c:'c-pa'},
-    {k:'notes',l:'Obs.',c:''},
-    {k:'_del',l:'',c:''},
+    {k:'fecha',l:'Fecha/Hora',c:'c-dt'},{k:'operador',l:'Operador',c:''},
+    {k:'tempPrimaria',l:'T.Prim',c:'c-h1'},{k:'tempSecundaria',l:'T.Sec',c:'c-h2'},
+    {k:'tempBagIn',l:'BagIN',c:'c-yw'},{k:'tempBagOut',l:'BagOUT',c:'c-cl'},
+    {k:'aguaRociador',l:'Agua PSI',c:'c-pw'},{k:'aireRociador',l:'Aire PSI',c:'c-pa'},
+    {k:'notes',l:'Obs.',c:''},{k:'_del',l:'',c:''},
   ];
   const arr=k=>sortCol===k?(sortAsc?' ↑':' ↓'):' ↕';
   let h=`<div class="table-wrap"><table><thead><tr>`;
@@ -626,7 +627,7 @@ function renderTable(){
   sorted.forEach(r=>{
     h+=`<tr>`;
     cols.forEach(c=>{
-      if(c.k==='fecha') h+=`<td class="c-dt">${r.fecha}<br>${r.hora}</td>`;
+      if(c.k==='fecha') h+=`<td class="c-dt">${r.fecha||''}<br>${r.hora||''}</td>`;
       else if(c.k==='_del') h+=`<td class="c-del" onclick="deleteRecord(${r.id})">🗑</td>`;
       else{const v=r[c.k];h+=`<td class="${v==null||v===''?'c-nu':c.c}">${v!=null&&v!==''?v:'—'}</td>`;}
     });
@@ -669,8 +670,8 @@ function renderStats(){
 // ── EXPORT ────────────────────────────────────────────
 function exportCSV(){
   if(!records.length)return alert('Sin registros.');
-  const cols=['fecha','hora','tempPrimaria','tempSecundaria','tempBagIn','tempBagOut','aguaRociador','aireRociador','notes'];
-  const hdr=['Fecha','Hora','T.Primaria(C)','T.Secundaria(C)','BagHouseIN(C)','BagHouseOUT(C)','AguaRociador(PSI)','AireRociador(PSI)','Observaciones'];
+  const cols=['fecha','hora','operador','tempPrimaria','tempSecundaria','tempBagIn','tempBagOut','aguaRociador','aireRociador','notes'];
+  const hdr=['Fecha','Hora','Operador','T.Primaria(C)','T.Secundaria(C)','BagHouseIN(C)','BagHouseOUT(C)','AguaRociador(PSI)','AireRociador(PSI)','Observaciones'];
   download([hdr.join(','),...records.map(r=>cols.map(c=>r[c]??'').join(','))].join('\n'),`incinerador_${today()}.csv`,'text/csv');
 }
 function exportJSON(){
@@ -695,14 +696,13 @@ function importJSONFile(inp){
 }
 function download(c,fn,t){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:t}));a.download=fn;a.click();}
 function today(){return new Date().toISOString().slice(0,10).replace(/-/g,'');}
-</script>
 
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
+// ── SERVICE WORKER ────────────────────────────────────
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
     navigator.serviceWorker.register('./sw.js')
-      .then(r => console.log('SW registered'))
-      .catch(e => console.log('SW error:', e));
+      .then(()=>console.log('SW ok'))
+      .catch(e=>console.log('SW error:',e));
   });
 }
 </script>
