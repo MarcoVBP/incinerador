@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta name="theme-color" content="#e07b39">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Incinerador">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Monitor Panel Incinerador</title>
+
+<script src="https://unpkg.com/tesseract.js@4.1.4/dist/tesseract.min.js"></script>
+<style>
+  :root{
+    --bg:#0d1117;--surface:#161b22;--surface2:#21262d;
+    --border:#30363d;--accent:#e07b39;
+    --green:#22c55e;--red:#ef4444;--yellow:#eab308;
+    --text:#e6edf3;--muted:#7d8590;
+    --heat1:#ff6b35;--heat2:#ff9e00;--cool:#38bdf8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;}
+  header{background:linear-gradient(135deg,#1a0800,#2d1200,#1a0800);border-bottom:2px solid var(--accent);padding:14px 20px;display:flex;align-items:center;gap:12px;}
+  header .icon{font-size:26px;}
+  header h1{font-size:17px;font-weight:700;color:var(--accent);}
+  header p{font-size:11px;color:var(--muted);margin-top:2px;}
+  .tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border);}
+  .tab{padding:10px 16px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);white-space:nowrap;}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+  .panel{display:none;padding:16px;}
+  .panel.active{display:block;}
+
+  .capture-zone{background:var(--surface);border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;}
+  .capture-zone.dragover{border-color:var(--accent);}
+  .cz-icon{font-size:36px;margin-bottom:8px;}
+  .cz-btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px;}
+  input[type=file]{display:none;}
+
+  .btn{padding:9px 18px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;touch-action:manipulation;}
+  .btn-primary{background:var(--accent);color:#fff;}
+  .btn-primary:active{background:#c96b2a;}
+  .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+  .btn-green{background:var(--green);color:#fff;}
+  .btn-red{background:var(--red);color:#fff;}
+  .btn-blue{background:#3b82f6;color:#fff;}
+  .btn-sm{padding:6px 14px;font-size:12px;}
+
+  /* ── CROPPER ───────────────────────────────────────── */
+  #cropperOverlay{
+    display:none;position:fixed;inset:0;background:#000;z-index:1000;
+    flex-direction:column;touch-action:none;
+  }
+  #cropperOverlay.active{display:flex;}
+  #cropperToolbar{
+    background:rgba(0,0,0,.85);padding:10px 16px;
+    display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;
+  }
+  #cropperToolbar span{font-size:12px;color:#aaa;}
+  #cropperCanvasWrap{
+    flex:1;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;
+  }
+  #cropCanvas{display:block;max-width:100%;max-height:100%;touch-action:none;}
+
+  /* selection rectangle drawn on top */
+  #selRect{
+    position:absolute;border:2px solid var(--accent);pointer-events:none;display:none;
+    box-shadow:0 0 0 9999px rgba(0,0,0,.5);
+  }
+  #cropperHint{
+    position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
+    background:rgba(0,0,0,.7);color:#ccc;font-size:12px;padding:6px 14px;border-radius:20px;
+    pointer-events:none;white-space:nowrap;
+  }
+
+  /* ── STATUS & PREVIEW ───────────────────────────────── */
+  #imgPreview{max-width:100%;border-radius:8px;margin-top:14px;display:none;border:1px solid var(--border);}
+  .status-bar{margin-top:12px;padding:10px 14px;border-radius:8px;font-size:13px;display:none;align-items:center;gap:8px;}
+  .status-bar.processing{display:flex;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.4);color:#93c5fd;}
+  .status-bar.success{display:flex;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.4);color:#86efac;}
+  .status-bar.error{display:flex;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);color:#fca5a5;}
+  .status-bar.warn{display:flex;background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.4);color:#fde047;}
+  .spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.2);border-top-color:#93c5fd;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* ── VALUES ─────────────────────────────────────────── */
+  .values-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px;}
+  @media(min-width:480px){.values-grid{grid-template-columns:1fr 1fr 1fr;}}
+  .val-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 8px;text-align:center;}
+  .val-card .vc-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;line-height:1.3;}
+  .val-card .vc-value{font-size:24px;font-weight:700;}
+  .val-card .vc-unit{font-size:11px;color:var(--muted);margin-top:2px;}
+  .val-card input{background:var(--surface2);border:1px solid var(--accent);color:var(--text);border-radius:6px;width:90px;font-size:18px;font-weight:700;text-align:center;padding:2px 4px;}
+  .tp .vc-value{color:var(--heat1);}
+  .ts .vc-value{color:var(--heat2);}
+  .bi .vc-value{color:var(--yellow);}
+  .bo .vc-value{color:var(--cool);}
+  .pw .vc-value{color:#38bdf8;}
+  .pa .vc-value{color:#a78bfa;}
+
+  .verify-row{margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;}
+  .meta-field{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;display:flex;align-items:center;gap:6px;}
+  .meta-field label{color:var(--muted);font-size:11px;}
+  .meta-field input{background:transparent;border:none;color:var(--text);font-size:13px;width:130px;}
+  .meta-field input:focus{outline:none;}
+
+  /* ── TABLE ───────────────────────────────────────────── */
+  .table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border);}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  thead th{background:var(--surface2);padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);cursor:pointer;white-space:nowrap;}
+  thead th.sa{color:var(--green);}thead th.sd{color:var(--accent);}
+  tbody tr:nth-child(even){background:rgba(255,255,255,.02);}
+  tbody tr:hover{background:rgba(224,123,57,.05);}
+  tbody td{padding:8px 10px;text-align:center;border-bottom:1px solid rgba(48,54,61,.5);}
+  .c-dt{color:var(--muted);font-size:11px;}
+  .c-h1{color:var(--heat1);font-weight:600;}.c-h2{color:var(--heat2);font-weight:600;}
+  .c-yw{color:var(--yellow);}.c-cl{color:var(--cool);}
+  .c-pw{color:#38bdf8;}.c-pa{color:#a78bfa;}
+  .c-nu{color:var(--border);}
+  .c-del{cursor:pointer;color:var(--muted);}
+  .c-del:hover{color:var(--red);}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;}
+  .count{font-size:12px;color:var(--muted);margin-left:auto;}
+  .empty-msg{text-align:center;padding:40px 16px;color:var(--muted);}
+  .em-icon{font-size:34px;margin-bottom:8px;}
+
+  /* ── STATS ───────────────────────────────────────────── */
+  .stat-block{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;}
+  .stat-block h4{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;}
+  .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+  .stat-cell{text-align:center;}
+  .stat-cell .sv{font-size:20px;font-weight:700;}
+  .stat-cell .sl{font-size:10px;color:var(--muted);margin-top:2px;}
+</style>
+</head>
+<body>
+
+<!-- ═══ CROPPER OVERLAY ══════════════════════════════════ -->
+<div id="cropperOverlay">
+  <div id="cropperToolbar">
+    <span>✂️ Arrastre para seleccionar la zona con números</span>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-green btn-sm" id="btnConfirmCrop">✅ Recortar</button>
+      <button class="btn btn-red btn-sm" onclick="cancelCrop()">✖ Cancelar</button>
+    </div>
+  </div>
+  <div id="cropperCanvasWrap">
+    <canvas id="cropCanvas"></canvas>
+    <div id="selRect"></div>
+    <div id="cropperHint">Toque y arrastre para seleccionar</div>
+  </div>
+</div>
+
+<header>
+  <div class="icon">🔥</div>
+  <div>
+    <h1>MONITOR PANEL INCINERADOR</h1>
+    <p>Temperaturas y presiones — OCR local sin API key</p>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('capture')">📷 Captura</div>
+  <div class="tab" onclick="switchTab('records')">📋 Registros</div>
+  <div class="tab" onclick="switchTab('stats')">📊 Estadísticas</div>
+</div>
+
+<!-- CAPTURE -->
+<div class="panel active" id="tab-capture">
+  <div class="capture-zone" id="dropZone">
+    <div class="cz-icon">📷</div>
+    <h3 style="font-size:15px;margin-bottom:4px;">Cargar foto del panel</h3>
+    <p style="font-size:12px;color:var(--muted);">Podrá recortar la zona con los números antes del OCR</p>
+    <div class="cz-btns">
+      <button class="btn btn-primary" onclick="document.getElementById('camInput').click()">📸 Cámara</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">🖼️ Archivo</button>
+    </div>
+    <input type="file" id="camInput" accept="image/*" capture="environment" onchange="handleImage(this)">
+    <input type="file" id="fileInput" accept="image/*" onchange="handleImage(this)">
+  </div>
+
+  <img id="imgPreview" alt="Vista previa">
+
+  <div class="status-bar" id="statusBar">
+    <div class="spinner" id="spinner" style="display:none"></div>
+    <span id="statusMsg"></span>
+  </div>
+
+  <div id="extractedSection" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;margin-bottom:10px;">
+      <h3 style="font-size:14px;color:var(--accent)">⚡ Valores extraídos</h3>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm btn-secondary" onclick="openCropperForRetry()">✂️ Recortar</button>
+        <button class="btn btn-sm btn-secondary" onclick="toggleEdit()">✏️ Editar</button>
+      </div>
+    </div>
+    <div class="values-grid" id="valuesGrid"></div>
+    <div class="verify-row">
+      <div class="meta-field"><label>Fecha</label><input type="date" id="metaFecha"></div>
+      <div class="meta-field"><label>Hora</label><input type="time" id="metaHora"></div>
+      <div class="meta-field"><label>Obs.</label><input type="text" id="metaNotes" placeholder="Opcional..." style="width:140px"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
+      <button class="btn btn-green" onclick="saveRecord()">💾 Guardar</button>
+      <button class="btn btn-secondary" onclick="resetCapture()">🔄 Nueva foto</button>
+    </div>
+  </div>
+</div>
+
+<!-- RECORDS -->
+<div class="panel" id="tab-records">
+  <div class="toolbar">
+    <button class="btn btn-secondary btn-sm" onclick="exportCSV()">⬇️ CSV</button>
+    <button class="btn btn-secondary btn-sm" onclick="exportJSON()">💾 JSON</button>
+    <button class="btn btn-secondary btn-sm" onclick="document.getElementById('importJSON').click()">📂 Importar</button>
+    <input type="file" id="importJSON" accept=".json" onchange="importJSONFile(this)">
+    <span class="count" id="recCount">0 registros</span>
+  </div>
+  <div id="recordsTableWrap">
+    <div class="empty-msg"><div class="em-icon">📋</div><p>Sin registros aún.</p></div>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="panel" id="tab-stats">
+  <div id="statsContent">
+    <div class="empty-msg"><div class="em-icon">📊</div><p>Guarda al menos un registro.</p></div>
+  </div>
+</div>
+
+<script>
+// ── FIELDS ───────────────────────────────────────────
+const FIELDS = [
+  {key:'tempPrimaria',   label:'T. Cámara Primaria',  unit:'°C',  cls:'tp'},
+  {key:'tempSecundaria', label:'T. Cámara Secundaria', unit:'°C',  cls:'ts'},
+  {key:'tempBagIn',      label:'Temp IN Bag House',    unit:'°C',  cls:'bi'},
+  {key:'tempBagOut',     label:'Temp OUT Bag House',   unit:'°C',  cls:'bo'},
+  {key:'aguaRociador',   label:'Agua Rociador',        unit:'PSI', cls:'pw'},
+  {key:'aireRociador',   label:'Aire Rociador',        unit:'PSI', cls:'pa'},
+];
+// ── STATE ─────────────────────────────────────────────
+const SK='incinerador_v3';
+let records=[];
+try{records=JSON.parse(localStorage.getItem(SK)||'[]');}catch(e){}
+let currentExtracted=null, editMode=false;
+let sortCol='fecha', sortAsc=false;
+let originalImageEl=null;
+
+// ── TABS ──────────────────────────────────────────────
+function switchTab(tab){
+  ['capture','records','stats'].forEach((n,i)=>{
+    document.querySelectorAll('.tab')[i].classList.toggle('active',n===tab);
+    document.getElementById('tab-'+n).classList.toggle('active',n===tab);
+  });
+  if(tab==='records') renderTable();
+  if(tab==='stats') renderStats();
+}
+
+// ── DRAG & DROP ───────────────────────────────────────
+const dz=document.getElementById('dropZone');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dragover');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('dragover'));
+dz.addEventListener('drop',e=>{
+  e.preventDefault();dz.classList.remove('dragover');
+  const f=e.dataTransfer.files[0];
+  if(f&&f.type.startsWith('image/')) processFile(f);
+});
+function handleImage(inp){if(!inp.files[0])return;processFile(inp.files[0]);inp.value='';}
+
+function processFile(file){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{
+      originalImageEl=img;
+      openCropper(img, file.name);
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ══════════════════════════════════════════════════════
+// CROPPER
+// ══════════════════════════════════════════════════════
+let cropFilename='';
+let cropScale=1; // canvas display scale vs natural image
+let sel={x:0,y:0,w:0,h:0,active:false,dragging:false,startX:0,startY:0};
+
+function openCropper(imgEl, filename){
+  cropFilename = filename||'panel.jpg';
+  const overlay = document.getElementById('cropperOverlay');
+  const canvas  = document.getElementById('cropCanvas');
+  const wrap    = document.getElementById('cropperCanvasWrap');
+  overlay.classList.add('active');
+
+  // Fit image into screen
+  const maxW = window.innerWidth;
+  const maxH = window.innerHeight - 60; // minus toolbar
+  const scale = Math.min(maxW/imgEl.naturalWidth, maxH/imgEl.naturalHeight, 1);
+  cropScale = scale;
+
+  canvas.width  = Math.floor(imgEl.naturalWidth  * scale);
+  canvas.height = Math.floor(imgEl.naturalHeight * scale);
+
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(imgEl, 0, 0, canvas.width, canvas.height);
+
+  sel = {x:0,y:0,w:0,h:0,active:false,dragging:false,startX:0,startY:0};
+  document.getElementById('selRect').style.display='none';
+  document.getElementById('cropperHint').style.display='block';
+}
+
+function openCropperForRetry(){
+  if(originalImageEl) openCropper(originalImageEl, cropFilename);
+}
+
+function cancelCrop(){
+  document.getElementById('cropperOverlay').classList.remove('active');
+}
+
+// Get position relative to canvas
+function getPos(e, canvas){
+  const rect = canvas.getBoundingClientRect();
+  const src  = e.touches ? e.touches[0] : e;
+  return {
+    x: src.clientX - rect.left,
+    y: src.clientY - rect.top
+  };
+}
+
+// Draw selection rectangle overlay
+function updateSelRect(canvas){
+  const rect = document.getElementById('selRect');
+  const canvasRect = canvas.getBoundingClientRect();
+  if(!sel.active || sel.w===0 || sel.h===0){rect.style.display='none';return;}
+  const x = Math.min(sel.startX, sel.startX+sel.w);
+  const y = Math.min(sel.startY, sel.startY+sel.h);
+  const w = Math.abs(sel.w);
+  const h = Math.abs(sel.h);
+  rect.style.display='block';
+  rect.style.left   = (canvasRect.left + x)+'px';
+  rect.style.top    = (canvasRect.top  + y)+'px';
+  rect.style.width  = w+'px';
+  rect.style.height = h+'px';
+}
+
+const cropCanvas = document.getElementById('cropCanvas');
+
+function onCropStart(e){
+  e.preventDefault();
+  const p=getPos(e,cropCanvas);
+  sel={x:p.x,y:p.y,w:0,h:0,active:true,dragging:true,startX:p.x,startY:p.y};
+  document.getElementById('cropperHint').style.display='none';
+  updateSelRect(cropCanvas);
+}
+function onCropMove(e){
+  e.preventDefault();
+  if(!sel.dragging) return;
+  const p=getPos(e,cropCanvas);
+  sel.w=p.x-sel.startX;
+  sel.h=p.y-sel.startY;
+  updateSelRect(cropCanvas);
+}
+function onCropEnd(e){
+  e.preventDefault();
+  sel.dragging=false;
+}
+
+cropCanvas.addEventListener('mousedown', onCropStart);
+cropCanvas.addEventListener('mousemove', onCropMove);
+cropCanvas.addEventListener('mouseup',   onCropEnd);
+cropCanvas.addEventListener('touchstart',onCropStart,{passive:false});
+cropCanvas.addEventListener('touchmove', onCropMove, {passive:false});
+cropCanvas.addEventListener('touchend',  onCropEnd,  {passive:false});
+
+document.getElementById('btnConfirmCrop').addEventListener('click',()=>{
+  const w=Math.abs(sel.w), h=Math.abs(sel.h);
+
+  // If no selection or too small, use full image
+  let cropX, cropY, cropW, cropH;
+  if(!sel.active || w<20 || h<20){
+    cropX=0; cropY=0;
+    cropW=originalImageEl.naturalWidth;
+    cropH=originalImageEl.naturalHeight;
+  } else {
+    // Convert display coords → original image coords
+    const sx = Math.min(sel.startX, sel.startX+sel.w);
+    const sy = Math.min(sel.startY, sel.startY+sel.h);
+    cropX = Math.round(sx / cropScale);
+    cropY = Math.round(sy / cropScale);
+    cropW = Math.round(w  / cropScale);
+    cropH = Math.round(h  / cropScale);
+    // Clamp
+    cropX = Math.max(0, Math.min(cropX, originalImageEl.naturalWidth));
+    cropY = Math.max(0, Math.min(cropY, originalImageEl.naturalHeight));
+    cropW = Math.min(cropW, originalImageEl.naturalWidth  - cropX);
+    cropH = Math.min(cropH, originalImageEl.naturalHeight - cropY);
+  }
+
+  document.getElementById('cropperOverlay').classList.remove('active');
+
+  // Show cropped preview
+  const preview = document.getElementById('imgPreview');
+  const pc = document.createElement('canvas');
+  pc.width=cropW; pc.height=cropH;
+  pc.getContext('2d').drawImage(originalImageEl, cropX,cropY,cropW,cropH, 0,0,cropW,cropH);
+  preview.src = pc.toDataURL('image/jpeg',0.95);
+  preview.style.display='block';
+
+  runOCR(originalImageEl, cropX, cropY, cropW, cropH, cropFilename);
+});
+
+// ── OCR con Tesseract (igual que ENVEA) ───────────────
+let ocrWorker = null;
+
+async function initWorker(){
+  if(ocrWorker) return ocrWorker;
+  setStatus('processing','Cargando motor OCR...');
+  ocrWorker = await Tesseract.createWorker('eng', 1, {
+    logger: m => {
+      if(m.status==='recognizing text')
+        setStatus('processing',`Reconociendo: ${Math.round((m.progress||0)*100)}%`);
+    }
+  });
+  await ocrWorker.setParameters({
+    tessedit_char_whitelist: '0123456789.',
+    tessedit_pageseg_mode: '6',
+  });
+  return ocrWorker;
+}
+
+async function runOCR(imgEl, cx, cy, cw, ch, filename){
+  setStatus('processing','Preparando imagen...');
+  document.getElementById('extractedSection').style.display='none';
+
+  try{
+    // Crop + escalar x3 + invertir + umbral (mismo método que ENVEA)
+    const scale=3;
+    const c=document.createElement('canvas');
+    c.width=cw*scale; c.height=ch*scale;
+    const ctx=c.getContext('2d');
+    ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(imgEl, cx,cy,cw,ch, 0,0,c.width,c.height);
+
+    // Invertir colores: fondo oscuro→claro, números blancos→negros
+    let id=ctx.getImageData(0,0,c.width,c.height);
+    for(let i=0;i<id.data.length;i+=4){
+      id.data[i]=255-id.data[i];
+      id.data[i+1]=255-id.data[i+1];
+      id.data[i+2]=255-id.data[i+2];
+    }
+    ctx.putImageData(id,0,0);
+
+    // Umbral de contraste
+    id=ctx.getImageData(0,0,c.width,c.height);
+    const d=id.data;
+    for(let i=0;i<d.length;i+=4){
+      const g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+      const v=g<160?0:255;
+      d[i]=d[i+1]=d[i+2]=v;
+    }
+    ctx.putImageData(id,0,0);
+
+    const worker=await initWorker();
+    setStatus('processing','Leyendo números...');
+    const {data:{text}}=await worker.recognize(c);
+    console.log('OCR raw:', text);
+
+    // Extraer números en orden de aparición
+    const nums=[];
+    for(const line of text.split('\n')){
+      const tokens=line.match(/\d+\.?\d*/g);
+      if(tokens) tokens.forEach(t=>{
+        const n=parseFloat(t);
+        if(!isNaN(n)&&t.length>=1) nums.push(n);
+      });
+    }
+    console.log('Números:', nums);
+
+    // Asignar por rango y orden
+    const RANGES={
+      tempPrimaria:[100,1200],tempSecundaria:[100,1200],
+      tempBagIn:[50,500],tempBagOut:[50,500],
+      aguaRociador:[0,200],aireRociador:[0,200],
+    };
+    const result={};
+    FIELDS.forEach(f=>result[f.key]=null);
+    let ni=0;
+    for(const f of FIELDS){
+      const [lo,hi]=RANGES[f.key];
+      while(ni<nums.length){
+        const n=nums[ni++];
+        if(n>=lo&&n<=hi){result[f.key]=n;break;}
+      }
+    }
+
+    const ts=parseTsFromName(filename)||new Date();
+    document.getElementById('metaFecha').value=ts.toISOString().slice(0,10);
+    document.getElementById('metaHora').value=ts.toTimeString().slice(0,5);
+
+    currentExtracted=result;
+    renderExtracted(result);
+
+    const found=FIELDS.filter(f=>result[f.key]!==null).length;
+    if(found===0)
+      setStatus('warn','⚠️ Sin valores detectados. Use ✂️ Recortar para ajustar zona o ✏️ Editar para ingresar.');
+    else
+      setStatus('success',`✅ ${found}/${FIELDS.length} valores detectados. Verifique y corrija si es necesario.`);
+
+  }catch(err){
+    console.error(err);
+    setStatus('error',`❌ ${err.message} — Use ✏️ Editar para ingresar manualmente.`);
+    const empty={};FIELDS.forEach(f=>empty[f.key]=null);
+    currentExtracted=empty;renderExtracted(empty);
+  }
+}
+
+function parseTsFromName(name){
+  const m=name.match(/(\d{2})-(\d{2})-(\d{4})\s*(\d{2})(\d{2})/);
+  if(m) return new Date(`${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:00`);
+  return null;
+}
+
+// ── RENDER ────────────────────────────────────────────
+function renderExtracted(data){
+  const grid=document.getElementById('valuesGrid');
+  grid.innerHTML='';
+  FIELDS.forEach(f=>{
+    const v=data[f.key];
+    const card=document.createElement('div');
+    card.className=`val-card ${f.cls}`;
+    card.id=`vc-${f.key}`;
+    card.innerHTML=`
+      <div class="vc-label">${f.label}</div>
+      <div class="vc-value" id="vv-${f.key}">${v!=null?v:'—'}</div>
+      <div class="vc-unit">${f.unit}</div>`;
+    grid.appendChild(card);
+  });
+  document.getElementById('extractedSection').style.display='block';
+  editMode=false;
+}
+
+function toggleEdit(){
+  editMode=!editMode;
+  FIELDS.forEach(f=>{
+    const vv=document.getElementById(`vv-${f.key}`);
+    const val=currentExtracted?currentExtracted[f.key]:null;
+    if(editMode){
+      vv.innerHTML=`<input type="number" step="any" value="${val!=null?val:''}"
+        onchange="currentExtracted['${f.key}']=this.value===''?null:parseFloat(this.value)">`;
+    } else {
+      const inp=vv.querySelector('input');
+      if(inp&&currentExtracted) currentExtracted[f.key]=inp.value===''?null:parseFloat(inp.value);
+      vv.textContent=currentExtracted&&currentExtracted[f.key]!=null?currentExtracted[f.key]:'—';
+    }
+  });
+  document.querySelector('[onclick="toggleEdit()"]').textContent=editMode?'✅ Listo':'✏️ Editar';
+}
+
+// ── SAVE ──────────────────────────────────────────────
+function saveRecord(){
+  if(!currentExtracted) return;
+  if(editMode) toggleEdit();
+  const rec={
+    id:Date.now(),
+    fecha:document.getElementById('metaFecha').value,
+    hora:document.getElementById('metaHora').value,
+    notes:document.getElementById('metaNotes').value,
+    ...Object.fromEntries(FIELDS.map(f=>[f.key,currentExtracted[f.key]]))
+  };
+  records.unshift(rec);
+  try{localStorage.setItem(SK,JSON.stringify(records));}catch(e){}
+  setStatus('success',`✅ Guardado — ${rec.fecha} ${rec.hora}`);
+  resetCapture();switchTab('records');
+}
+
+function resetCapture(){
+  document.getElementById('imgPreview').src='';
+  document.getElementById('imgPreview').style.display='none';
+  document.getElementById('extractedSection').style.display='none';
+  document.getElementById('statusBar').className='status-bar';
+  document.getElementById('metaNotes').value='';
+  currentExtracted=null;editMode=false;originalImageEl=null;
+}
+
+function setStatus(type,msg){
+  const bar=document.getElementById('statusBar');
+  bar.className=`status-bar ${type}`;
+  document.getElementById('spinner').style.display=type==='processing'?'block':'none';
+  document.getElementById('statusMsg').textContent=msg;
+}
+
+// ── TABLE ─────────────────────────────────────────────
+function renderTable(){
+  const wrap=document.getElementById('recordsTableWrap');
+  document.getElementById('recCount').textContent=`${records.length} registro${records.length!==1?'s':''}`;
+  if(!records.length){wrap.innerHTML=`<div class="empty-msg"><div class="em-icon">📋</div><p>Sin registros.</p></div>`;return;}
+  const sorted=[...records].sort((a,b)=>{
+    let va=sortCol==='fecha'?`${a.fecha} ${a.hora}`:a[sortCol];
+    let vb=sortCol==='fecha'?`${b.fecha} ${b.hora}`:b[sortCol];
+    if(va==null) return 1;if(vb==null) return -1;
+    return sortAsc?(va>vb?1:-1):(va<vb?1:-1);
+  });
+  const cols=[
+    {k:'fecha',l:'Fecha/Hora',c:'c-dt'},
+    {k:'tempPrimaria',l:'T.Prim °C',c:'c-h1'},
+    {k:'tempSecundaria',l:'T.Sec °C',c:'c-h2'},
+    {k:'tempBagIn',l:'Bag IN °C',c:'c-yw'},
+    {k:'tempBagOut',l:'Bag OUT °C',c:'c-cl'},
+    {k:'aguaRociador',l:'Agua PSI',c:'c-pw'},
+    {k:'aireRociador',l:'Aire PSI',c:'c-pa'},
+    {k:'notes',l:'Obs.',c:''},
+    {k:'_del',l:'',c:''},
+  ];
+  const arr=k=>sortCol===k?(sortAsc?' ↑':' ↓'):' ↕';
+  let h=`<div class="table-wrap"><table><thead><tr>`;
+  cols.forEach(c=>{
+    if(c.k==='_del'){h+=`<th></th>`;return;}
+    const sc=sortCol===c.k?(sortAsc?'sa':'sd'):'';
+    h+=`<th class="${sc}" onclick="setSort('${c.k}')">${c.l}${arr(c.k)}</th>`;
+  });
+  h+=`</tr></thead><tbody>`;
+  sorted.forEach(r=>{
+    h+=`<tr>`;
+    cols.forEach(c=>{
+      if(c.k==='fecha') h+=`<td class="c-dt">${r.fecha}<br>${r.hora}</td>`;
+      else if(c.k==='_del') h+=`<td class="c-del" onclick="deleteRecord(${r.id})">🗑</td>`;
+      else{const v=r[c.k];h+=`<td class="${v==null||v===''?'c-nu':c.c}">${v!=null&&v!==''?v:'—'}</td>`;}
+    });
+    h+=`</tr>`;
+  });
+  h+=`</tbody></table></div>`;
+  wrap.innerHTML=h;
+}
+function setSort(col){if(sortCol===col)sortAsc=!sortAsc;else{sortCol=col;sortAsc=true;}renderTable();}
+function deleteRecord(id){if(!confirm('¿Eliminar?'))return;records=records.filter(r=>r.id!==id);try{localStorage.setItem(SK,JSON.stringify(records));}catch(e){}renderTable();}
+
+// ── STATS ─────────────────────────────────────────────
+function renderStats(){
+  const sc=document.getElementById('statsContent');
+  if(!records.length){sc.innerHTML=`<div class="empty-msg"><div class="em-icon">📊</div><p>Sin registros.</p></div>`;return;}
+  const sf=[
+    {k:'tempPrimaria',l:'T. Cámara Primaria',u:'°C',col:'var(--heat1)'},
+    {k:'tempSecundaria',l:'T. Cámara Secundaria',u:'°C',col:'var(--heat2)'},
+    {k:'tempBagIn',l:'Temp IN Bag House',u:'°C',col:'var(--yellow)'},
+    {k:'tempBagOut',l:'Temp OUT Bag House',u:'°C',col:'var(--cool)'},
+    {k:'aguaRociador',l:'Agua Rociador',u:'PSI',col:'#38bdf8'},
+    {k:'aireRociador',l:'Aire Rociador',u:'PSI',col:'#a78bfa'},
+  ];
+  const avg=a=>{const v=a.filter(x=>x!=null);return v.length?(v.reduce((s,x)=>s+x,0)/v.length).toFixed(1):'—';};
+  const max=a=>{const v=a.filter(x=>x!=null);return v.length?Math.max(...v):'—';};
+  const min=a=>{const v=a.filter(x=>x!=null);return v.length?Math.min(...v):'—';};
+  let h=`<p style="font-size:12px;color:var(--muted);margin-bottom:12px;">${records.length} registros</p>`;
+  sf.forEach(s=>{
+    const vals=records.map(r=>r[s.k]!=null?parseFloat(r[s.k]):null);
+    h+=`<div class="stat-block"><h4>${s.l}</h4><div class="stat-row">
+      <div class="stat-cell"><div class="sv" style="color:${s.col}">${avg(vals)}</div><div class="sl">Prom ${s.u}</div></div>
+      <div class="stat-cell"><div class="sv" style="color:var(--red)">${max(vals)}</div><div class="sl">Máx ${s.u}</div></div>
+      <div class="stat-cell"><div class="sv" style="color:var(--cool)">${min(vals)}</div><div class="sl">Mín ${s.u}</div></div>
+      <div class="stat-cell"><div class="sv" style="color:var(--muted)">${vals.filter(v=>v!=null).length}</div><div class="sl">Lecturas</div></div>
+    </div></div>`;
+  });
+  sc.innerHTML=h;
+}
+
+// ── EXPORT ────────────────────────────────────────────
+function exportCSV(){
+  if(!records.length)return alert('Sin registros.');
+  const cols=['fecha','hora','tempPrimaria','tempSecundaria','tempBagIn','tempBagOut','aguaRociador','aireRociador','notes'];
+  const hdr=['Fecha','Hora','T.Primaria(C)','T.Secundaria(C)','BagHouseIN(C)','BagHouseOUT(C)','AguaRociador(PSI)','AireRociador(PSI)','Observaciones'];
+  download([hdr.join(','),...records.map(r=>cols.map(c=>r[c]??'').join(','))].join('\n'),`incinerador_${today()}.csv`,'text/csv');
+}
+function exportJSON(){
+  if(!records.length)return alert('Sin registros.');
+  download(JSON.stringify(records,null,2),`incinerador_${today()}.json`,'application/json');
+}
+function importJSONFile(inp){
+  const f=inp.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const im=JSON.parse(e.target.result);
+      if(!Array.isArray(im))throw new Error('Formato inválido');
+      const ex=new Set(records.map(r=>r.id));
+      const news=im.filter(r=>!ex.has(r.id));
+      records=[...records,...news];
+      try{localStorage.setItem(SK,JSON.stringify(records));}catch(e){}
+      renderTable();alert(`✅ ${news.length} registros importados.`);
+    }catch(err){alert('Error: '+err.message);}
+  };
+  r.readAsText(f);inp.value='';
+}
+function download(c,fn,t){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:t}));a.download=fn;a.click();}
+function today(){return new Date().toISOString().slice(0,10).replace(/-/g,'');}
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(r => console.log('SW registered'))
+      .catch(e => console.log('SW error:', e));
+  });
+}
+</script>
+</body>
+</html>
